@@ -3,10 +3,13 @@ from discord.ext import commands
 
 import asyncio
 import random
-
 import logging
-from geo import TOKEN_BOTTES
+
+from geo import TOKEN_BOTTES, START_BALANCE
 from rps import RockPaperScissorsGame
+from coin import CoinGame
+from wallet import Wallet
+from WalletDatabaseConnector import WalletDatabaseConnector
 
 TOKEN = TOKEN_BOTTES
 
@@ -18,6 +21,8 @@ logger.addHandler(handler)
 
 intents = discord.Intents.default()
 intents.members = True
+
+WALLET_CONNECTOR = WalletDatabaseConnector()
 
 
 async def ban_random_member(banned, ctx):
@@ -57,12 +62,26 @@ def find_player(bot, player_name, guild_name):
         return ''
 
 
+async def show_result_rps(games, ctx):
+    for i in games:
+        if i == str(ctx.author):
+            await ctx.send(i.show_result())
+
+            if i.not_winner:
+                await kick_player(bot, i.not_winner, ctx.guild)
+            else:
+                for j in i.get_players():
+                    await kick_player(bot, j, ctx.guild)
+
+                await ctx.send('Слабакам тут не место.')
+
 
 class RandomThings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.game_members = []
         self.rock_paper_scissors_games = []
+        self.wallets = []
 
     @commands.command(name="help")
     async def help(self, ctx):
@@ -71,9 +90,25 @@ class RandomThings(commands.Cog):
 !!roulette - запустить русскую рулетку
 !!start_rps (Ник#Дискриминатор) - бросить вызов игроку в игре камень-ножницы-бумага
 !!choose_rps (камень/ножницы/бумага) - выбрать тип атаки в игре камень-ножницы-бумага
-!!show_result_rps - похвастаться результатами вашей последней игры
         """
         await ctx.send(helper_text)
+
+    @commands.command(name="get_balances")
+    async def set_players_wallets(self, ctx):
+        for guild in self.bot.guilds:
+            for member in guild.members:
+                if member not in self.wallets:
+                    player_name = str(member)
+
+                    player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
+
+                    if player_balance > -1:
+                        self.wallets.append(Wallet(player=str(member), start_balance=player_balance))
+                    else:
+                        self.wallets.append(Wallet(player=str(member), start_balance=START_BALANCE))
+                        WALLET_CONNECTOR.add_player(str(member))
+
+        print(self.wallets)
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
@@ -86,7 +121,7 @@ class RandomThings(commands.Cog):
         await countdown(ctx)
         random_member_to_ban = random_choice_if_not_empty(members_to_ban)
 
-        for i in members_to_ban:
+        for i in range(len(members_to_ban)):
             try:
                 if random_member_to_ban:
                     await ban_random_member(random_member_to_ban, ctx)
@@ -109,7 +144,7 @@ class RandomThings(commands.Cog):
             elif first_player not in self.rock_paper_scissors_games and\
                     second_player not in self.rock_paper_scissors_games:
 
-                self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player))
+                self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player, ctx.guild))
                 await ctx.send(f"Играем в камень-ножницы-бумага")
 
         else:
@@ -125,27 +160,37 @@ class RandomThings(commands.Cog):
             for i in self.rock_paper_scissors_games:
                 if i == str(ctx.author):
                     i.choose(choice, str(ctx.author))
+                    if i.can_show_result(ctx.guild):
+                        await show_result_rps(self.rock_paper_scissors_games, ctx)
+                        self.rock_paper_scissors_games.remove(i)
 
         print(self.rock_paper_scissors_games)
 
-    @commands.command(name="show_result_rps")
-    async def show_result(self, ctx):
-        for i in self.rock_paper_scissors_games:
-            if i == str(ctx.author):
-                if i.can_show_result():
-
-                    await ctx.send(i.show_result())
-
-                    if i.not_winner:
-                        await kick_player(bot, i.not_winner, ctx.guild)
-                    else:
-                        for j in i.get_players():
-                            await kick_player(bot, j, ctx.guild)
-
-                    await ctx.send('Слабакам тут не место')
-
     @commands.command(name="coin")
     async def coin_game(self, ctx):
+        player = str(ctx.author)
+        bet = 0
+        wallet = 0
+        for i in self.wallets:
+            print(i)
+            if i == player:
+                bet = i.get_balance()
+                print(i)
+                wallet = i
+
+        coin = CoinGame(bet)
+        print(bet)
+        print(coin.get_result())
+        if coin.get_result():
+            await ctx.send(f'Вы выйграли. Ваш выйгрыш: {coin.determine_balance_after_flip()} монеты')
+            wallet.add_money(coin.determine_balance_after_flip())
+        else:
+            await ctx.send(f'Вы проиграли. Сумма вашего проигрыша составит'
+                           f' {coin.determine_balance_after_flip()} монеты')
+            wallet.take_money(coin.determine_balance_after_flip())
+        print(self.wallets)
+        for i in self.wallets:
+            print(i.get_balance())
 
 
 bot = commands.Bot(command_prefix="!!", intents=intents)

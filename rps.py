@@ -2,9 +2,10 @@ import random
 
 
 class RockPaperScissorsGame:
-    def __init__(self, player1, player2):
+    def __init__(self, player1, player2, guild):
         self._player1 = player1
         self._player2 = player2
+        self.guild = guild
         self.choices = {self._player1: False, self._player2: False}
         self.not_winner = ''
 
@@ -34,24 +35,23 @@ class RockPaperScissorsGame:
 
         return 'Победил ' + result
 
-    def can_show_result(self):
+    def can_show_result(self, request_guild):
         if self.choices[self._player1] and self.choices[self._player2]:
-            return True
+            if request_guild == self.guild:
+                return True
 
     def show_result(self):
-        if self.can_show_result():
-            player1_choice = self.choices[self._player1]
-            player2_choice = self.choices[self._player2]
+        player1_choice = self.choices[self._player1]
+        player2_choice = self.choices[self._player2]
 
-            result = self.find_winner(player1_choice, player2_choice)
+        result = self.find_winner(player1_choice, player2_choice)
 
-            return f"{result}, выбор игроков:\n" \
-                   f"{self._player1} - {self.choices[self._player1]}\n" \
-                   f"{self._player2} - {self.choices[self._player2]}"
+        return f"{result}, выбор игроков:\n" \
+               f"{self._player1} - {self.choices[self._player1]}\n" \
+               f"{self._player2} - {self.choices[self._player2]}"
 
     def __eq__(self, other):
-        if other in self.choices:
-            return True
+        return other in self.choices
 
     def __repr__(self):
         return str(self.choices)
