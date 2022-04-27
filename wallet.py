@@ -1,6 +1,3 @@
-import sqlite3
-
-
 class Wallet:
     def __init__(self, player, start_balance):
         self._balance = start_balance

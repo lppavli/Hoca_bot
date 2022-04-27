@@ -6,10 +6,10 @@ import random
 import logging
 
 from geo import TOKEN_BOTTES, START_BALANCE
-from rps import RockPaperScissorsGame
-from coin import CoinGame
-from wallet import Wallet
-from WalletDatabaseConnector import WalletDatabaseConnector
+from games.RockScissorsPaper import RockPaperScissorsGame
+from games.Coin import CoinGame
+from Wallet import Wallet
+from WalletDatabaseConnecter import WalletDatabaseConnecter
 
 TOKEN = TOKEN_BOTTES
 
@@ -22,7 +22,7 @@ logger.addHandler(handler)
 intents = discord.Intents.default()
 intents.members = True
 
-WALLET_CONNECTOR = WalletDatabaseConnector()
+WALLET_CONNECTOR = WalletDatabaseConnecter()
 
 
 async def ban_random_member(banned, ctx):
@@ -62,18 +62,19 @@ def find_player(bot, player_name, guild_name):
         return ''
 
 
-async def show_result_rps(games, ctx):
-    for i in games:
-        if i == str(ctx.author):
-            await ctx.send(i.show_result())
+async def show_result_rps(game, games, ctx):
+    if game.can_show_result(ctx.guild):
+        for i in games:
+            if i == str(ctx.author):
+                await ctx.send(i.show_result())
 
-            if i.not_winner:
-                await kick_player(bot, i.not_winner, ctx.guild)
-            else:
-                for j in i.get_players():
-                    await kick_player(bot, j, ctx.guild)
+                if i.not_winner:
+                    await kick_player(bot, i.not_winner, ctx.guild)
+                else:
+                    for j in i.get_players():
+                        await kick_player(bot, j, ctx.guild)
 
-                await ctx.send('Слабакам тут не место.')
+                    await ctx.send('Слабакам тут не место.')
 
 
 class RandomThings(commands.Cog):
@@ -101,14 +102,14 @@ class RandomThings(commands.Cog):
                     player_name = str(member)
 
                     player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
-
                     if player_balance > -1:
-                        self.wallets.append(Wallet(player=str(member), start_balance=player_balance))
+                        self.wallets.append(Wallet(player=player_name, start_balance=player_balance))
                     else:
-                        self.wallets.append(Wallet(player=str(member), start_balance=START_BALANCE))
-                        WALLET_CONNECTOR.add_player(str(member))
+                        self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
+                        WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
 
-        print(self.wallets)
+        for i in self.wallets:
+            print(i.get_balance())
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
@@ -133,7 +134,7 @@ class RandomThings(commands.Cog):
         print(self.game_members)
 
     @commands.command(name="start_rps")
-    async def rock_paper_scissors(self, ctx, second):
+    async def rock_paper_scissors_start(self, ctx, second):
         first_player = str(ctx.author)
         second_player = str(find_player(bot, second, ctx.guild))
 
@@ -153,16 +154,15 @@ class RandomThings(commands.Cog):
         print(self.rock_paper_scissors_games)
 
     @commands.command(name="choose_rps")
-    async def choose_rps(self, ctx, choice):
+    async def rock_paper_scissors_choose(self, ctx, choice):
         if str(ctx.author) not in self.rock_paper_scissors_games:
             await ctx.send("Вы не учавствуете ни в одной игре в 'камень-ножницы-бумага'")
         else:
             for i in self.rock_paper_scissors_games:
                 if i == str(ctx.author):
                     i.choose(choice, str(ctx.author))
-                    if i.can_show_result(ctx.guild):
-                        await show_result_rps(self.rock_paper_scissors_games, ctx)
-                        self.rock_paper_scissors_games.remove(i)
+                    await show_result_rps(i, self.rock_paper_scissors_games, ctx)
+                    self.rock_paper_scissors_games.remove(i)
 
         print(self.rock_paper_scissors_games)
 
@@ -170,7 +170,7 @@ class RandomThings(commands.Cog):
     async def coin_game(self, ctx):
         player = str(ctx.author)
         bet = 0
-        wallet = 0
+        wallet = Wallet('', 0)
         for i in self.wallets:
             print(i)
             if i == player:
@@ -188,6 +188,8 @@ class RandomThings(commands.Cog):
             await ctx.send(f'Вы проиграли. Сумма вашего проигрыша составит'
                            f' {coin.determine_balance_after_flip()} монеты')
             wallet.take_money(coin.determine_balance_after_flip())
+        WALLET_CONNECTOR.save_player_balance(player, wallet.get_balance())
+
         print(self.wallets)
         for i in self.wallets:
             print(i.get_balance())
