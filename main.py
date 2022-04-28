@@ -109,7 +109,7 @@ class RandomThings(commands.Cog):
                         WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
 
         for i in self.wallets:
-            print(i.get_balance())
+            print(i.execute_balance())
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
@@ -174,7 +174,7 @@ class RandomThings(commands.Cog):
         for i in self.wallets:
             print(i)
             if i == player:
-                bet = i.get_balance()
+                bet = i.execute_balance()
                 print(i)
                 wallet = i
 
@@ -188,11 +188,19 @@ class RandomThings(commands.Cog):
             await ctx.send(f'Вы проиграли. Сумма вашего проигрыша составит'
                            f' {coin.determine_balance_after_flip()} монеты')
             wallet.take_money(coin.determine_balance_after_flip())
-        WALLET_CONNECTOR.save_player_balance(player, wallet.get_balance())
+        WALLET_CONNECTOR.save_player_balance(player, wallet.execute_balance())
 
         print(self.wallets)
         for i in self.wallets:
-            print(i.get_balance())
+            print(i.execute_balance())
+
+    @commands.command(name="balance")
+    async def execute_balance(self, ctx):
+        player = str(ctx.author)
+        for i in self.wallets:
+            print(i)
+            if i == player:
+                await ctx.send(i.execute_balance())
 
 
 bot = commands.Bot(command_prefix="!!", intents=intents)

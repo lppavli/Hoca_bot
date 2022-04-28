@@ -10,7 +10,7 @@ class Wallet:
         if money_amount <= self._balance:
             self._balance -= money_amount
 
-    def get_balance(self):
+    def execute_balance(self):
         return self._balance
 
     def __eq__(self, other):
