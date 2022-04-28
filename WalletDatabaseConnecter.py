@@ -28,7 +28,7 @@ class WalletDatabaseConnecter:
             self.db_sess.add(wallet)
             self.db_sess.commit()
 
-    def save_player_balance(self, player_name, new_balance):
+    def save_to_player_balance(self, player_name, new_balance):
         self.db_sess = create_session()
         player = self.execute_player_orm_object(player_name)
         player.balance = new_balance
@@ -42,10 +42,9 @@ dbc = WalletDatabaseConnecter()
 print(dbc.player_is_exist('Test'))
 dbc.add_player('Test', 1000)
 print(dbc.execute_player_balance('Test'))
-dbc.save_player_balance('Test', 1005)
+dbc.save_to_player_balance('Test', 1005)
 print(dbc.execute_player_balance('Test'))
-dbc.save_player_balance('Test', 1010)
+dbc.save_to_player_balance('Test', 1010)
 print(dbc.execute_player_balance('Test'))
-dbc.save_player_balance('Test', 1020)
+dbc.save_to_player_balance('Test', 1020)
 print(dbc.execute_player_balance('Test'))
-

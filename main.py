@@ -32,7 +32,7 @@ async def ban_random_member(banned, ctx):
 
 
 async def kick_player(bot, player_name, guild_name):
-    player_to_ban = find_player(bot, player_name, guild_name)
+    player_to_ban = find_player_in_guild(bot, player_name, guild_name)
     try:
         await player_to_ban.kick()
     except Exception:
@@ -48,18 +48,31 @@ async def countdown(ctx):
 def random_choice_if_not_empty(list):
     if list:
         return random.choice(list)
+    return 0
 
 
-def find_player(bot, player_name, guild_name):
-    try:
-        for guild in bot.guilds:
-            if guild == guild_name:
-                for member in guild.members:
-                    if str(member) == player_name:
-                        return member
-        raise Exception('В данном чате нет этого игрока')
-    except Exception:
-        return ''
+def find_guild(bot, guild_name):
+    for guild in bot.guilds:
+        if guild == guild_name:
+            return guild
+    raise Exception('Нет такого канала')
+
+
+def find_player_in_guild(bot, player_name, guild_name):
+    guild = find_guild(bot, guild_name)
+    for member in guild.members:
+        if str(member) == player_name:
+            return member
+    return 'В данноем чате нет этого игрока.'
+
+
+def find_players_without_wallet(bot, wallets):
+    res = []
+    for guild in bot.guilds:
+        for member in guild.members:
+            if member not in wallets:
+                res.append(str(member))
+    return res
 
 
 async def show_result_rps(game, games, ctx):
@@ -67,14 +80,6 @@ async def show_result_rps(game, games, ctx):
         for i in games:
             if i == str(ctx.author):
                 await ctx.send(i.show_result())
-
-                if i.not_winner:
-                    await kick_player(bot, i.not_winner, ctx.guild)
-                else:
-                    for j in i.get_players():
-                        await kick_player(bot, j, ctx.guild)
-
-                    await ctx.send('Слабакам тут не место.')
 
 
 class RandomThings(commands.Cog):
@@ -96,17 +101,15 @@ class RandomThings(commands.Cog):
 
     @commands.command(name="get_balances")
     async def set_players_wallets(self, ctx):
-        for guild in self.bot.guilds:
-            for member in guild.members:
-                if member not in self.wallets:
-                    player_name = str(member)
+        players_without_wallet = find_players_without_wallet(self.bot, self.wallets)
 
-                    player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
-                    if player_balance > -1:
-                        self.wallets.append(Wallet(player=player_name, start_balance=player_balance))
-                    else:
-                        self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
-                        WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
+        for player_name in players_without_wallet:
+            player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
+            if player_balance > -1:
+                self.wallets.append(Wallet(player=player_name, start_balance=player_balance))
+            else:
+                self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
+                WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
 
         for i in self.wallets:
             print(i.execute_balance())
@@ -117,18 +120,20 @@ class RandomThings(commands.Cog):
 
     @commands.command(name="roulette")
     async def roulette(self, ctx):
-        await ctx.send(f"Играем в рулетку через")
+        if not ctx.author.guild_permissions.kick_members:
+            return
+        await ctx.send("Играем в рулетку через")
         members_to_ban = self.game_members
         await countdown(ctx)
         random_member_to_ban = random_choice_if_not_empty(members_to_ban)
 
-        for i in range(len(members_to_ban)):
+        for _i in range(len(members_to_ban)):
             try:
                 if random_member_to_ban:
                     await ban_random_member(random_member_to_ban, ctx)
                     self.game_members.remove(random_member_to_ban)
                 break
-            except Exception:
+            except AttributeError:
                 members_to_ban.remove(random_member_to_ban)
                 random_member_to_ban = random_choice_if_not_empty(members_to_ban)
         print(self.game_members)
@@ -136,7 +141,7 @@ class RandomThings(commands.Cog):
     @commands.command(name="start_rps")
     async def rock_paper_scissors_start(self, ctx, second):
         first_player = str(ctx.author)
-        second_player = str(find_player(bot, second, ctx.guild))
+        second_player = str(find_player_in_guild(bot, second, ctx.guild))
 
         if second_player:
             if second_player == first_player:
@@ -146,7 +151,7 @@ class RandomThings(commands.Cog):
                     second_player not in self.rock_paper_scissors_games:
 
                 self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player, ctx.guild))
-                await ctx.send(f"Играем в камень-ножницы-бумага")
+                await ctx.send("Играем в камень-ножницы-бумага")
 
         else:
             await ctx.send(f"Не могу найти игрока {second}")
@@ -188,7 +193,7 @@ class RandomThings(commands.Cog):
             await ctx.send(f'Вы проиграли. Сумма вашего проигрыша составит'
                            f' {coin.determine_balance_after_flip()} монеты')
             wallet.take_money(coin.determine_balance_after_flip())
-        WALLET_CONNECTOR.save_player_balance(player, wallet.execute_balance())
+        WALLET_CONNECTOR.save_to_player_balance(player, wallet.execute_balance())
 
         print(self.wallets)
         for i in self.wallets:

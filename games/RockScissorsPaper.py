@@ -35,10 +35,11 @@ class RockPaperScissorsGame:
 
         return 'Победил ' + result
 
-    def can_show_result(self, request_guild):
-        if self.choices[self._player1] and self.choices[self._player2]:
-            if request_guild == self.guild:
-                return True
+    def check_choices(self):
+        return self.choices[self._player1] != 0 and self.choices[self._player2] != 0
+
+    def can_show_result(self, request_guild) -> bool:
+        return self.check_choices() and request_guild == self.guild
 
     def show_result(self):
         player1_choice = self.choices[self._player1]
