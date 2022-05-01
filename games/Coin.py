@@ -10,7 +10,7 @@ class CoinGame:
 
     def determine_balance_after_flip(self):
         if self._result:
-            return self._bet // self._coefficients["win"]
+            return self._bet
         else:
             return self._bet // self._coefficients['loss'] * 2
 

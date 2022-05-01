@@ -1,9 +1,9 @@
-import discord
-from discord.ext import commands
-
 import asyncio
 import random
 import logging
+
+import discord
+from discord.ext import commands
 
 from geo import TOKEN_BOTTES, START_BALANCE
 from games.RockScissorsPaper import RockPaperScissorsGame
@@ -35,8 +35,8 @@ async def kick_player(bot, player_name, guild_name):
     player_to_ban = find_player_in_guild(bot, player_name, guild_name)
     try:
         await player_to_ban.kick()
-    except Exception:
-        print(player_to_ban)
+    except AttributeError:
+        pass
 
 
 async def countdown(ctx):
@@ -55,7 +55,7 @@ def find_guild(bot, guild_name):
     for guild in bot.guilds:
         if guild == guild_name:
             return guild
-    raise Exception('Нет такого канала')
+    raise AttributeError('Нет такого канала')
 
 
 def find_player_in_guild(bot, player_name, guild_name):
@@ -75,11 +75,28 @@ def find_players_without_wallet(bot, wallets):
     return res
 
 
-async def show_result_rps(game, games, ctx):
-    if game.can_show_result(ctx.guild):
-        for i in games:
-            if i == str(ctx.author):
-                await ctx.send(i.show_result())
+def exchange(game, wallets):
+    for i in wallets:
+        print(i == game.execute_winner(), 'winner')
+        print(i == game.execute_not_winner(), 'not winner')
+        print(game.execute_bet())
+        if i == game.execute_winner():
+            i.add_money(game.execute_bet())
+            print(i.execute_balance())
+            WALLET_CONNECTOR.save_to_player_balance(game.execute_winner(), i.execute_balance())
+        elif i == game.execute_not_winner():
+            print(game.execute_bet(), 'bet')
+            print(i, 'i')
+            i.take_money(game.execute_bet())
+            print(i.execute_balance(), 'balance')
+            WALLET_CONNECTOR.save_to_player_balance(game.execute_not_winner(), i.execute_balance())
+
+
+async def show_result_rps(game, wallets):
+    if game.can_show_result():
+        result, context = game.show_result()
+        await context.send(result)
+        exchange(game, wallets)
 
 
 class RandomThings(commands.Cog):
@@ -110,9 +127,7 @@ class RandomThings(commands.Cog):
             else:
                 self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
                 WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
-
-        for i in self.wallets:
-            print(i.execute_balance())
+        await ctx.send('Получил')
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
@@ -136,27 +151,23 @@ class RandomThings(commands.Cog):
             except AttributeError:
                 members_to_ban.remove(random_member_to_ban)
                 random_member_to_ban = random_choice_if_not_empty(members_to_ban)
-        print(self.game_members)
 
     @commands.command(name="start_rps")
-    async def rock_paper_scissors_start(self, ctx, second):
+    async def rock_paper_scissors_start(self, ctx, second, bet):
         first_player = str(ctx.author)
-        second_player = str(find_player_in_guild(bot, second, ctx.guild))
+        second_player = str(find_player_in_guild(self.bot, second, ctx.guild))
 
         if second_player:
             if second_player == first_player:
                 await ctx.send("Нельзя играть с самим собой")
-                return
             elif first_player not in self.rock_paper_scissors_games and\
                     second_player not in self.rock_paper_scissors_games:
 
-                self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player, ctx.guild))
+                self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player, ctx, bet))
                 await ctx.send("Играем в камень-ножницы-бумага")
 
         else:
             await ctx.send(f"Не могу найти игрока {second}")
-
-        print(self.rock_paper_scissors_games)
 
     @commands.command(name="choose_rps")
     async def rock_paper_scissors_choose(self, ctx, choice):
@@ -166,10 +177,9 @@ class RandomThings(commands.Cog):
             for i in self.rock_paper_scissors_games:
                 if i == str(ctx.author):
                     i.choose(choice, str(ctx.author))
-                    await show_result_rps(i, self.rock_paper_scissors_games, ctx)
-                    self.rock_paper_scissors_games.remove(i)
-
-        print(self.rock_paper_scissors_games)
+                    if i.can_show_result():
+                        await show_result_rps(i, self.wallets)
+                        self.rock_paper_scissors_games.remove(i)
 
     @commands.command(name="coin")
     async def coin_game(self, ctx):
@@ -177,33 +187,30 @@ class RandomThings(commands.Cog):
         bet = 0
         wallet = Wallet('', 0)
         for i in self.wallets:
-            print(i)
+
             if i == player:
                 bet = i.execute_balance()
-                print(i)
+
                 wallet = i
 
         coin = CoinGame(bet)
-        print(bet)
-        print(coin.get_result())
+
+        formatted_balacne_after_flip = '{0:,}'.format(coin.determine_balance_after_flip()).replace(',', ' ')
+
         if coin.get_result():
-            await ctx.send(f'Вы выйграли. Ваш выйгрыш: {coin.determine_balance_after_flip()} монеты')
+            await ctx.send(f'{ctx.author}. Вы выйграли. Ваш выйгрыш: {formatted_balacne_after_flip} монеты')
             wallet.add_money(coin.determine_balance_after_flip())
         else:
-            await ctx.send(f'Вы проиграли. Сумма вашего проигрыша составит'
-                           f' {coin.determine_balance_after_flip()} монеты')
+            await ctx.send(f'{ctx.author}. Вы проиграли. Сумма вашего проигрыша составит'
+                           f' {formatted_balacne_after_flip} монеты')
             wallet.take_money(coin.determine_balance_after_flip())
         WALLET_CONNECTOR.save_to_player_balance(player, wallet.execute_balance())
-
-        print(self.wallets)
-        for i in self.wallets:
-            print(i.execute_balance())
 
     @commands.command(name="balance")
     async def execute_balance(self, ctx):
         player = str(ctx.author)
         for i in self.wallets:
-            print(i)
+
             if i == player:
                 await ctx.send(i.execute_balance())
 
