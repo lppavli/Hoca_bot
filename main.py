@@ -27,7 +27,9 @@ WALLET_CONNECTOR = WalletDatabaseConnecter()
 
 async def ban_random_member(banned, ctx):
     await banned.kick()
+
     await ctx.send(banned)
+
     await asyncio.sleep(5)
 
 
@@ -41,7 +43,9 @@ async def kick_player(bot, player_name, guild_name):
 
 async def countdown(ctx):
     for i in range(3, 0, -1):
+
         await ctx.send(str(i))
+
         await asyncio.sleep(1)
 
 
@@ -63,7 +67,7 @@ def find_player_in_guild(bot, player_name, guild_name):
     for member in guild.members:
         if str(member) == player_name:
             return member
-    return 'В данноем чате нет этого игрока.'
+    return False
 
 
 def find_players_without_wallet(bot, wallets):
@@ -102,7 +106,7 @@ async def show_result_rps(game, wallets):
 class RandomThings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.game_members = []
+        self.roulette_members = []
         self.rock_paper_scissors_games = []
         self.wallets = []
 
@@ -114,6 +118,7 @@ class RandomThings(commands.Cog):
 !!start_rps (Ник#Дискриминатор) - бросить вызов игроку в игре камень-ножницы-бумага
 !!choose_rps (камень/ножницы/бумага) - выбрать тип атаки в игре камень-ножницы-бумага
         """
+
         await ctx.send(helper_text)
 
     @commands.command(name="get_balances")
@@ -127,26 +132,31 @@ class RandomThings(commands.Cog):
             else:
                 self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
                 WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
+
         await ctx.send('Получил')
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
-        self.game_members.append(str(ctx.author))
+        self.roulette_members.append(str(ctx.author))
 
     @commands.command(name="roulette")
     async def roulette(self, ctx):
         if not ctx.author.guild_permissions.kick_members:
             return
+
         await ctx.send("Играем в рулетку через")
-        members_to_ban = self.game_members
+
+        members_to_ban = self.roulette_members
+
         await countdown(ctx)
+
         random_member_to_ban = random_choice_if_not_empty(members_to_ban)
 
         for _i in range(len(members_to_ban)):
             try:
                 if random_member_to_ban:
                     await ban_random_member(random_member_to_ban, ctx)
-                    self.game_members.remove(random_member_to_ban)
+                    self.roulette_members.remove(random_member_to_ban)
                 break
             except AttributeError:
                 members_to_ban.remove(random_member_to_ban)
@@ -155,27 +165,38 @@ class RandomThings(commands.Cog):
     @commands.command(name="start_rps")
     async def rock_paper_scissors_start(self, ctx, second, bet):
         first_player = str(ctx.author)
-        second_player = str(find_player_in_guild(self.bot, second, ctx.guild))
+        second_player = find_player_in_guild(self.bot, second, ctx.guild)
 
         if second_player:
+            second_player = str(second_player)
             if second_player == first_player:
+
                 await ctx.send("Нельзя играть с самим собой")
+
             elif first_player not in self.rock_paper_scissors_games and\
                     second_player not in self.rock_paper_scissors_games:
-
                 self.rock_paper_scissors_games.append(RockPaperScissorsGame(first_player, second_player, ctx, bet))
+
                 await ctx.send("Играем в камень-ножницы-бумага")
 
         else:
+
             await ctx.send(f"Не могу найти игрока {second}")
 
     @commands.command(name="choose_rps")
     async def rock_paper_scissors_choose(self, ctx, choice):
         if str(ctx.author) not in self.rock_paper_scissors_games:
+
             await ctx.send("Вы не учавствуете ни в одной игре в 'камень-ножницы-бумага'")
+
         else:
             for i in self.rock_paper_scissors_games:
                 if i == str(ctx.author):
+                    if choice == 'cancel':
+                        players = i.execute_players_names()
+                        await i.ctx.send(f'Игра {players[0]} против {players[1]} была отменена по решению {ctx.author}')
+                        self.rock_paper_scissors_games.remove(i)
+                        return
                     i.choose(choice, str(ctx.author))
                     if i.can_show_result():
                         await show_result_rps(i, self.wallets)
@@ -198,11 +219,15 @@ class RandomThings(commands.Cog):
         formatted_balacne_after_flip = '{0:,}'.format(coin.determine_balance_after_flip()).replace(',', ' ')
 
         if coin.get_result():
+
             await ctx.send(f'{ctx.author}. Вы выйграли. Ваш выйгрыш: {formatted_balacne_after_flip} монеты')
+
             wallet.add_money(coin.determine_balance_after_flip())
         else:
+
             await ctx.send(f'{ctx.author}. Вы проиграли. Сумма вашего проигрыша составит'
                            f' {formatted_balacne_after_flip} монеты')
+
             wallet.take_money(coin.determine_balance_after_flip())
         WALLET_CONNECTOR.save_to_player_balance(player, wallet.execute_balance())
 
@@ -212,6 +237,7 @@ class RandomThings(commands.Cog):
         for i in self.wallets:
 
             if i == player:
+
                 await ctx.send(i.execute_balance())
 
 

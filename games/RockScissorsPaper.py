@@ -2,11 +2,11 @@ import random
 
 
 class RockPaperScissorsGame:
-    def __init__(self, player1, player2, ctx, bet):
+    def __init__(self, player1: str, player2: str, ctx, bet):
         self._player1 = player1
         self._player2 = player2
         self.ctx = ctx
-        self._bet = bet
+        self._bet = int(bet)
         self.choices = {self._player1: False, self._player2: False}
         self._not_winner = ''
         self._winner = ''
@@ -49,6 +49,9 @@ class RockPaperScissorsGame:
 
     def execute_bet(self):
         return self._bet
+
+    def execute_players_names(self):
+        return str(self._player1[:]), str(self._player2[:])
 
     def check_choices(self):
         return self.choices[self._player1] != 0 and self.choices[self._player2] != 0
