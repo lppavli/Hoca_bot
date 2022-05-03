@@ -1,6 +1,7 @@
 import asyncio
 import random
 import logging
+from requests import get
 
 import discord
 from discord.ext import commands
@@ -23,6 +24,34 @@ intents = discord.Intents.default()
 intents.members = True
 
 WALLET_CONNECTOR = WalletDatabaseConnecter()
+
+bot = commands.Bot(command_prefix="!!", intents=intents)
+
+wallets = []
+
+
+@bot.event
+async def on_ready():
+    global wallets
+    wallets = []
+    players_without_wallet = find_players_without_wallet(bot, wallets)
+
+    for player_name in players_without_wallet:
+        player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
+        print(player_balance)
+        if player_balance <= -1:
+            WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
+            player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
+        wallets.append(Wallet(player=player_name, start_balance=player_balance))
+    print(wallets)
+
+
+@bot.event
+async def on_member_join(member):
+    if str(member) in find_players_without_wallet(bot, wallets):
+        wallets.append(Wallet(player=str(member), start_balance=START_BALANCE))
+        if WALLET_CONNECTOR.execute_player_balance(str(member)) <= -1:
+            WALLET_CONNECTOR.add_player(member, START_BALANCE)
 
 
 async def ban_random_member(banned, ctx):
@@ -79,7 +108,7 @@ def find_players_without_wallet(bot, wallets):
     return res
 
 
-def exchange(game, wallets):
+def rps_exchange(game, wallets):
     for i in wallets:
         print(i == game.execute_winner(), 'winner')
         print(i == game.execute_not_winner(), 'not winner')
@@ -100,7 +129,7 @@ async def show_result_rps(game, wallets):
     if game.can_show_result():
         result, context = game.show_result()
         await context.send(result)
-        exchange(game, wallets)
+        rps_exchange(game, wallets)
 
 
 class RandomThings(commands.Cog):
@@ -108,7 +137,7 @@ class RandomThings(commands.Cog):
         self.bot = bot
         self.roulette_members = []
         self.rock_paper_scissors_games = []
-        self.wallets = []
+        wallets = []
 
     @commands.command(name="help")
     async def help(self, ctx):
@@ -120,20 +149,6 @@ class RandomThings(commands.Cog):
         """
 
         await ctx.send(helper_text)
-
-    @commands.command(name="get_balances")
-    async def set_players_wallets(self, ctx):
-        players_without_wallet = find_players_without_wallet(self.bot, self.wallets)
-
-        for player_name in players_without_wallet:
-            player_balance = WALLET_CONNECTOR.execute_player_balance(player_name)
-            if player_balance > -1:
-                self.wallets.append(Wallet(player=player_name, start_balance=player_balance))
-            else:
-                self.wallets.append(Wallet(player=player_name, start_balance=START_BALANCE))
-                WALLET_CONNECTOR.add_player(player_name, START_BALANCE)
-
-        await ctx.send('Получил')
 
     @commands.command(name="enter")
     async def add_member(self, ctx):
@@ -194,12 +209,16 @@ class RandomThings(commands.Cog):
                 if i == str(ctx.author):
                     if choice == 'cancel':
                         players = i.execute_players_names()
+
                         await i.ctx.send(f'Игра {players[0]} против {players[1]} была отменена по решению {ctx.author}')
+
                         self.rock_paper_scissors_games.remove(i)
                         return
                     i.choose(choice, str(ctx.author))
                     if i.can_show_result():
-                        await show_result_rps(i, self.wallets)
+
+                        await show_result_rps(i, wallets)
+
                         self.rock_paper_scissors_games.remove(i)
 
     @commands.command(name="coin")
@@ -207,15 +226,13 @@ class RandomThings(commands.Cog):
         player = str(ctx.author)
         bet = 0
         wallet = Wallet('', 0)
-        for i in self.wallets:
+        for i in wallets:
 
             if i == player:
                 bet = i.execute_balance()
-
                 wallet = i
 
         coin = CoinGame(bet)
-
         formatted_balacne_after_flip = '{0:,}'.format(coin.determine_balance_after_flip()).replace(',', ' ')
 
         if coin.get_result():
@@ -234,14 +251,42 @@ class RandomThings(commands.Cog):
     @commands.command(name="balance")
     async def execute_balance(self, ctx):
         player = str(ctx.author)
-        for i in self.wallets:
+        print(wallets)
+        for i in wallets:
 
             if i == player:
 
-                await ctx.send(i.execute_balance())
+                await ctx.send(f'{ctx.author}, ваш баланс: {i.execute_balance()}')
+
+    @commands.command(name='rand_cat')
+    async def random_picture(self, ctx):
+        is_paid = False
+        for i in wallets:
+            if i == str(ctx.author):
+                print(i.execute_balance())
+                if i.execute_balance() < 1000:
+                    await ctx.send('У вас недостаточно средств.')
+                    return
+                else:
+                    i.take_money(1000)
+                    WALLET_CONNECTOR.save_to_player_balance(str(ctx.author), i.execute_balance())
+                    is_paid = True
+                print(i.execute_balance())
+        if is_paid:
+            try:
+                source = get(f"https://aws.random.cat/meow").json()
+                print(source)
+                if source:
+                    await ctx.send(source['file'])
+                    print(source)
+            except Exception:
+                await ctx.send("С сервером что-то не то")
+        else:
+            await ctx.send('Извините, возникли проблемы с оплатой')
 
 
-bot = commands.Bot(command_prefix="!!", intents=intents)
 bot.remove_command("help")
-bot.add_cog(RandomThings(bot))
+bot_commands = RandomThings(bot)
+bot.add_cog(bot_commands)
 bot.run(TOKEN)
+
