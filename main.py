@@ -54,10 +54,10 @@ async def on_member_join(member):
             WALLET_CONNECTOR.add_player(member, START_BALANCE)
 
 
-async def ban_random_member(banned, ctx):
-    await banned.kick()
+async def kick_member(kicked, ctx):
+    await kicked.kick()
 
-    await ctx.send(banned)
+    await ctx.send(kicked)
 
     await asyncio.sleep(5)
 
@@ -125,6 +125,19 @@ def rps_exchange(game, wallets):
             WALLET_CONNECTOR.save_to_player_balance(game.execute_not_winner(), i.execute_balance())
 
 
+def pay(price, player_name, ctx) -> bool:
+    is_paid = False
+    for i in wallets:
+        if i == str(player_name):
+            print(i.execute_balance())
+            if i.execute_balance() > price:
+                i.take_money(price)
+                WALLET_CONNECTOR.save_to_player_balance(str(player_name), i.execute_balance())
+                is_paid = True
+            print(i.execute_balance())
+    return is_paid
+
+
 async def show_result_rps(game, wallets):
     if game.can_show_result():
         result, context = game.show_result()
@@ -153,6 +166,7 @@ class RandomThings(commands.Cog):
     @commands.command(name="enter")
     async def add_member(self, ctx):
         self.roulette_members.append(str(ctx.author))
+        print(ctx.author)
 
     @commands.command(name="roulette")
     async def roulette(self, ctx):
@@ -161,21 +175,45 @@ class RandomThings(commands.Cog):
 
         await ctx.send("Играем в рулетку через")
 
-        members_to_ban = self.roulette_members
+        members_to_kick = self.roulette_members
 
         await countdown(ctx)
 
-        random_member_to_ban = random_choice_if_not_empty(members_to_ban)
+        random_member_to_kick = random_choice_if_not_empty(members_to_kick)
+        print(members_to_kick)
+        print(random_member_to_kick)
 
-        for _i in range(len(members_to_ban)):
+        for _i in range(len(members_to_kick)):
+            print(random_member_to_kick)
             try:
-                if random_member_to_ban:
-                    await ban_random_member(random_member_to_ban, ctx)
-                    self.roulette_members.remove(random_member_to_ban)
+                if random_member_to_kick:
+                    random_member_to_kick = find_player_in_guild(self.bot, random_member_to_kick, ctx.guild)
+                    await kick_member(random_member_to_kick, ctx)
+                    print(random_member_to_kick)
+                    winner = random_choice_if_not_empty(members_to_kick)
+                    balance = 0
+                    winner_wallet = 0
+                    print(winner, ' winner')
+                    for i in wallets:
+                        if i == str(random_member_to_kick):
+                            balance = i.execute_balance()
+                            print(balance)
+                            WALLET_CONNECTOR.save_to_player_balance(str(i), i.execute_balance())
+                            i.take_money(balance)
+                        elif i == str(winner):
+                            winner_wallet = i
+                            print(winner_wallet.execute_balance())
+                    winner_wallet.add_money(balance)
+                    WALLET_CONNECTOR.save_to_player_balance(str(winner_wallet), winner_wallet.execute_balance())
+                    random_member_to_kick = []
+
                 break
-            except AttributeError:
-                members_to_ban.remove(random_member_to_ban)
-                random_member_to_ban = random_choice_if_not_empty(members_to_ban)
+            except Exception:
+                print(members_to_kick)
+                if str(random_member_to_kick) in members_to_kick:
+                    members_to_kick.remove(str(random_member_to_kick))
+                print(members_to_kick)
+                random_member_to_kick = random_choice_if_not_empty(members_to_kick)
 
     @commands.command(name="start_rps")
     async def rock_paper_scissors_start(self, ctx, second, bet):
@@ -260,18 +298,7 @@ class RandomThings(commands.Cog):
 
     @commands.command(name='rand_cat')
     async def random_picture(self, ctx):
-        is_paid = False
-        for i in wallets:
-            if i == str(ctx.author):
-                print(i.execute_balance())
-                if i.execute_balance() < 1000:
-                    await ctx.send('У вас недостаточно средств.')
-                    return
-                else:
-                    i.take_money(1000)
-                    WALLET_CONNECTOR.save_to_player_balance(str(ctx.author), i.execute_balance())
-                    is_paid = True
-                print(i.execute_balance())
+        is_paid = pay(1000, ctx.author, ctx)
         if is_paid:
             try:
                 source = get(f"https://aws.random.cat/meow").json()
