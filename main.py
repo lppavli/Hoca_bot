@@ -154,7 +154,6 @@ class RandomThings(commands.Cog):
         self.bot = bot
         self.roulette_members = []
         self.rock_paper_scissors_games = []
-        wallets = []
 
     @commands.command(name="help")
     async def help(self, ctx):
