@@ -9,7 +9,7 @@ from discord.ext import commands
 from geo import TOKEN_BOTTES, START_BALANCE
 from games.RockScissorsPaper import RockPaperScissorsGame
 from games.Coin import CoinGame
-from Wallet import Wallet
+from wallet import Wallet
 from WalletDatabaseConnecter import WalletDatabaseConnecter
 
 TOKEN = TOKEN_BOTTES
