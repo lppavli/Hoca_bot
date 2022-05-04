@@ -25,7 +25,7 @@ intents.members = True
 
 WALLET_CONNECTOR = WalletDatabaseConnecter()
 
-bot = commands.Bot(command_prefix="!!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 
 wallets = []
 
@@ -49,15 +49,19 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     if str(member) in find_players_without_wallet(bot, wallets):
-        wallets.append(Wallet(player=str(member), start_balance=START_BALANCE))
         if WALLET_CONNECTOR.execute_player_balance(str(member)) <= -1:
+            wallets.append(Wallet(player=str(member),
+                                  start_balance=START_BALANCE))
             WALLET_CONNECTOR.add_player(member, START_BALANCE)
+        else:
+            wallets.append(Wallet(player=str(member),
+                                  start_balance=WALLET_CONNECTOR.execute_player_balance(str(member))))
 
 
 async def kick_member(kicked, ctx):
     await kicked.kick()
 
-    await ctx.send(kicked)
+    await ctx.send(f'Пока, {kicked}')
 
     await asyncio.sleep(5)
 
@@ -103,7 +107,7 @@ def find_players_without_wallet(bot, wallets):
     res = []
     for guild in bot.guilds:
         for member in guild.members:
-            if member not in wallets:
+            if str(member) not in wallets:
                 res.append(str(member))
     return res
 
@@ -155,10 +159,24 @@ class RandomThings(commands.Cog):
     @commands.command(name="help")
     async def help(self, ctx):
         helper_text = """Hola! Это бот, командующий различными мини - играми.
-Вот список команд: !!enter - присоедениться к ожиданющим начала русской рулетки,
-!!roulette - запустить русскую рулетку
-!!start_rps (Ник#Дискриминатор) - бросить вызов игроку в игре камень-ножницы-бумага
-!!choose_rps (камень/ножницы/бумага) - выбрать тип атаки в игре камень-ножницы-бумага
+Вот список команд: 
+                !!enter - присоедениться к ожиданющим начала русской рулетки
+                
+                !!roulette - запустить русскую рулетку. После начала игры будет выбран один случайный игрок, который
+                будет кикнут с сервера и лишен всего имущества. Имущество перейдёт другому случайному игроку в рулетку
+                
+                !!start_rps (Ник#Дискриминатор) (ставка) - бросить вызов игроку в игре камень-ножницы-бумага
+                
+                !!choose_rps cancel - завершить игру в камень-ножницы-бумагу
+                
+                !!choose_rps (камень/ножницы/бумага) - выбрать тип атаки в игре камень-ножницы-бумага
+                
+                !!balance - проверить баланс
+                
+                !!coin - игра в монетку. В случае выйгрыша ваши монеты удвоятся, в случае проигрыша - уменьшатся втрое
+                
+                !!rand_cat - случайная картинка/гифка с котом. Возврат средств в случае сбоя серверов не предусмотрен
+                
         """
 
         await ctx.send(helper_text)
@@ -188,24 +206,37 @@ class RandomThings(commands.Cog):
             try:
                 if random_member_to_kick:
                     random_member_to_kick = find_player_in_guild(self.bot, random_member_to_kick, ctx.guild)
+
                     await kick_member(random_member_to_kick, ctx)
                     print(random_member_to_kick)
+
+                    if str(random_member_to_kick) in members_to_kick:
+                        members_to_kick.remove(str(random_member_to_kick))
+
                     winner = random_choice_if_not_empty(members_to_kick)
                     balance = 0
                     winner_wallet = 0
                     print(winner, ' winner')
+
                     for i in wallets:
+                        print(i)
                         if i == str(random_member_to_kick):
-                            balance = i.execute_balance()
-                            print(balance)
-                            WALLET_CONNECTOR.save_to_player_balance(str(i), i.execute_balance())
+                            balance = int(i.execute_balance())
+                            print(balance, ' kicked balance')
                             i.take_money(balance)
+                            WALLET_CONNECTOR.save_to_player_balance(str(i), i.execute_balance())
+                            print(i.execute_balance(), ' kicked balance')
                         elif i == str(winner):
                             winner_wallet = i
-                            print(winner_wallet.execute_balance())
+                            print(winner_wallet.execute_balance(), ' winner balance')
+
                     winner_wallet.add_money(balance)
+                    print(winner_wallet.execute_balance(), ' winner balance')
                     WALLET_CONNECTOR.save_to_player_balance(str(winner_wallet), winner_wallet.execute_balance())
+                    await ctx.send(f'Деньги {random_member_to_kick} перешли к {str(winner_wallet)}')
+                    print(WALLET_CONNECTOR.execute_player_balance(str(winner_wallet)), ' DB')
                     random_member_to_kick = []
+                    self.roulette_members = []
 
                 break
             except Exception:
@@ -309,7 +340,7 @@ class RandomThings(commands.Cog):
             except Exception:
                 await ctx.send("С сервером что-то не то")
         else:
-            await ctx.send('Извините, возникли проблемы с оплатой')
+            await ctx.send('Извините, возникли проблемы с оплатой. Возможно, у вас недостаточно средств')
 
 
 bot.remove_command("help")
