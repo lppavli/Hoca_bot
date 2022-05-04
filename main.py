@@ -25,7 +25,7 @@ intents.members = True
 
 WALLET_CONNECTOR = WalletDatabaseConnecter()
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix="!!", intents=intents)
 
 wallets = []
 
